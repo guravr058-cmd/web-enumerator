@@ -137,13 +137,6 @@ All are included in `requirements.txt`.
 Pull requests and suggestions are welcome. Please open an issue first to discuss any major changes.
 
 ---
-
-## 📜 License
-
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
-
----
-
 ## 🙏 Acknowledgements
 
 Built with ❤️ for the security community. Special thanks to all open‑source projects that made this possible.
