@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web Security Suite | Enhanced Enumeration + Attack Testing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #0a0a0a; color: #0f0; padding: 20px; }
+        .container { max-width: 1400px; margin: auto; }
+        .header { background: #111; border: 1px solid #0f0; border-radius: 15px; padding: 20px; margin-bottom: 20px; text-align: center; }
+        .warning { background: #300; border-left: 4px solid #f00; padding: 10px; margin: 15px 0; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; background: #222; cursor: pointer; border-radius: 8px; color: #0f0; }
+        .tab.active { background: #0f0; color: #000; font-weight: bold; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .input-card { background: #111; border: 1px solid #0f0; border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .input-group { display: flex; gap: 15px; }
+        input { flex: 1; background: #000; border: 1px solid #0f0; color: #0f0; padding: 12px; border-radius: 8px; }
+        button { background: #0f0; color: #000; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:disabled { opacity: 0.5; }
+        .attack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 10px; margin-top: 15px; max-height: 500px; overflow-y: auto; }
+        .attack-category { margin-top: 15px; }
+        .attack-category h4 { color: #0f0; border-bottom: 1px solid #0f0; margin-bottom: 10px; }
+        .attack-category label { display: block; margin: 5px 0; }
+        .progress-card, .results-card { background: #111; border: 1px solid #0f0; border-radius: 15px; padding: 20px; margin-top: 20px; display: none; }
+        .progress-bar { background: #222; height: 25px; border-radius: 12px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { background: #0f0; width: 0%; height: 100%; text-align: center; line-height: 25px; color: #000; }
+        .log { background: #000; padding: 10px; max-height: 200px; overflow-y: auto; font-family: monospace; margin-top: 10px; }
+        .log-entry { border-left: 3px solid #0f0; margin: 5px 0; padding-left: 8px; }
+        .stats-grid { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
+        .stat-card { background: #222; padding: 15px; border-radius: 10px; text-align: center; flex: 1; }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .risk-score { font-size: 3rem; text-align: center; margin: 20px; }
+        .risk-critical { color: #f00; }
+        .risk-high { color: #f66; }
+        .risk-medium { color: #fa0; }
+        details { margin-top: 10px; }
+        summary { cursor: pointer; color: #0f0; font-weight: bold; }
+        .steps { background: #1a1a1a; padding: 10px; border-radius: 8px; margin-top: 5px; font-size: 0.9em; }
+        .cvss-badge { display: inline-block; background: #333; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 10px; }
+        .location { color: #ff0; }
+        .payload { color: #f0f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+        th { background: #1a1a1a; color: #0f0; }
+        .upgrade-btn { background: #444; border: 1px solid #0f0; margin-left: 10px; }
+        @media (max-width: 700px) { .input-group { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🔍 Web Security Suite (Auto‑Upgrade Enabled)</h1>
+        <p>Enumeration + 70+ Attack Tests with CVSS, Location, Payload & Step‑by‑step Exploitation</p>
+        <button onclick="upgradeTool()" class="upgrade-btn">🔄 Upgrade Tool (Self‑Update)</button>
+        <div class="warning">⚠️ Only test systems you own or have permission!</div>
+    </div>
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('enum')">🔎 Web Enumeration</div>
+        <div class="tab" onclick="switchTab('attack')">⚔️ Attack Testing</div>
+    </div>
+
+    <!-- Enumeration Panel -->
+    <div id="enumPanel" class="panel active">
+        <div class="input-card">
+            <h2>Target</h2>
+            <div class="input-group">
+                <input type="text" id="enumTarget" placeholder="example.com or 192.168.1.1 or subdomain.example.com">
+                <button onclick="startEnum()">Start Enumeration</button>
+            </div>
+        </div>
+        <div id="enumProgress" class="progress-card"><div class="progress-bar"><div id="enumProgressFill" class="progress-fill">0%</div></div><div class="log" id="enumLog"></div></div>
+        <div id="enumResults" class="results-card"></div>
+    </div>
+
+    <!-- Attack Testing Panel -->
+    <div id="attackPanel" class="panel">
+        <div class="input-card">
+            <h2>Target</h2>
+            <div class="input-group">
+                <input type="text" id="attackTarget" placeholder="example.com or 192.168.1.1">
+                <button onclick="loadAttackList()">🔄 Refresh Attack List</button>
+                <button onclick="runSelectedAttacks()">▶ Run Selected Attacks</button>
+            </div>
+            <div id="attackListContainer" class="attack-grid">Loading attacks...</div>
+        </div>
+        <div id="attackProgress" class="progress-card"><div class="progress-bar"><div id="attackProgressFill" class="progress-fill">0%</div></div><div class="log" id="attackLog"></div></div>
+        <div id="attackResults" class="results-card"></div>
+    </div>
+</div>
+
+<script>
+    let currentEnumId = null, enumInterval = null;
+    let currentAttackSession = null, attackInterval = null;
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        if (tab === 'enum') {
+            document.querySelector('.tab:first-child').classList.add('active');
+            document.getElementById('enumPanel').classList.add('active');
+        } else {
+            document.querySelector('.tab:last-child').classList.add('active');
+            document.getElementById('attackPanel').classList.add('active');
+            loadAttackList();
+        }
+    }
+
+    async function loadAttackList() {
+        const resp = await fetch('/api/attack_list');
+        const attacks = await resp.json();
+        const container = document.getElementById('attackListContainer');
+        if (!attacks.length) { container.innerHTML = '<p>No attacks loaded. Check internet connection.</p>'; return; }
+        const cats = {};
+        attacks.forEach(a => { if (!cats[a.category]) cats[a.category] = []; cats[a.category].push(a); });
+        let html = '';
+        for (const [cat, items] of Object.entries(cats)) {
+            html += `<div class="attack-category"><h4>📁 ${cat}</h4>`;
+            items.forEach(a => { html += `<label><input type="checkbox" value="${a.id}"> ${a.name}</label><br>`; });
+            html += `</div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function addLog(panel, msg) {
+        const logDiv = document.getElementById(panel === 'enum' ? 'enumLog' : 'attackLog');
+        const entry = document.createElement('div'); entry.className = 'log-entry';
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    async function startEnum() {
+        const target = document.getElementById('enumTarget').value.trim();
+        if (!target) { alert('Enter target (domain or IP)'); return; }
+        document.getElementById('enumProgress').style.display = 'block';
+        document.getElementById('enumResults').style.display = 'none';
+        addLog('enum', `Starting enumeration on ${target}`);
+        const resp = await fetch('/api/start_scan', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target}) });
+        const data = await resp.json();
+        if (data.scan_id) {
+            currentEnumId = data.scan_id;
+            if (enumInterval) clearInterval(enumInterval);
+            enumInterval = setInterval(async () => {
+                const res = await fetch(`/api/scan_results/${currentEnumId}`);
+                const results = await res.json();
+                if (results.status === 'completed') {
+                    clearInterval(enumInterval);
+                    displayEnumResults(results);
+                    addLog('enum', 'Enumeration completed');
+                    document.getElementById('enumProgressFill').style.width = '100%';
+                } else if (results.status === 'running') {
+                    document.getElementById('enumProgressFill').style.width = '50%';
+                } else {
+                    document.getElementById('enumProgressFill').style.width = '80%';
+                }
+            }, 2000);
+        }
+    }
+
+    function displayEnumResults(results) {
+        const div = document.getElementById('enumResults');
+        div.style.display = 'block';
+        let html = `<h3>📊 Summary for ${results.target}</h3><div class="stats-grid">
+            <div class="stat-card"><div class="stat-value">${results.subdomains?.length || 0}</div>Subdomains</div>
+            <div class="stat-card"><div class="stat-value">${results.open_ports?.length || 0}</div>Open Ports</div>
+            <div class="stat-card"><div class="stat-value">${results.filtered_ports?.length || 0}</div>Filtered/Closed Ports</div>
+            <div class="stat-card"><div class="stat-value">${results.static_pages?.length || 0}</div>Static Pages</div>
+            <div class="stat-card"><div class="stat-value">${results.dynamic_pages?.length || 0}</div>Dynamic Pages</div>
+        </div>`;
+
+        // Subdomains with IPs
+        if (results.subdomains && results.subdomains.length) {
+            html += `<h4>🌐 Subdomains (resolved IPs)</h4><ul>${results.subdomains.map(s => `<li>${s.subdomain} → ${s.ip}</li>`).join('')}</ul>`;
+        } else {
+            html += `<h4>🌐 Subdomains</h4><p>No subdomains found.</p>`;
+        }
+
+        // Open ports
+        if (results.open_ports && results.open_ports.length) {
+            html += `<h4>🔌 Open Ports</h4><ul>${results.open_ports.map(p => `<li>Port ${p.port} - ${p.service}</li>`).join('')}</ul>`;
+        } else {
+            html += `<h4>🔌 Open Ports</h4><p>No open ports detected (or scan limited).</p>`;
+        }
+
+        // Filtered ports (sample)
+        if (results.filtered_ports && results.filtered_ports.length) {
+            html += `<h4>🚫 Filtered/Closed Ports (sample)</h4><ul>${results.filtered_ports.slice(0,15).map(p => `<li>Port ${p.port} - ${p.state}</li>`).join('')}</ul>`;
+            if (results.filtered_ports.length > 15) html += `<li>... and ${results.filtered_ports.length - 15} more</li>`;
+        }
+
+        // Static webpages
+        if (results.static_pages && results.static_pages.length) {
+            html += `<h4>📄 Static Webpages</h4><ul>${results.static_pages.map(p => `<li><a href="${p.url}" target="_blank">${p.url}</a> (title: ${p.title}, size: ${p.size} bytes)</li>`).join('')}</ul>`;
+        } else {
+            html += `<h4>📄 Static Webpages</h4><p>No static pages identified.</p>`;
+        }
+
+        // Dynamic webpages
+        if (results.dynamic_pages && results.dynamic_pages.length) {
+            html += `<h4>⚙️ Dynamic Webpages</h4><ul>${results.dynamic_pages.map(p => `<li><a href="${p.url}" target="_blank">${p.url}</a> (title: ${p.title}, size: ${p.size} bytes)</li>`).join('')}</ul>`;
+        } else {
+            html += `<h4>⚙️ Dynamic Webpages</h4><p>No dynamic pages identified.</p>`;
+        }
+
+        // Server list
+        if (results.server_list && results.server_list.length) {
+            html += `<h4>🖥️ Server List</h4><ul>${results.server_list.map(s => `<li>${s}</li>`).join('')}</ul>`;
+        }
+
+        // Technologies
+        if (results.technologies && results.technologies.length) {
+            html += `<h4>💻 Technologies Detected</h4><ul>${results.technologies.map(t => `<li>${t.name} (${t.category})</li>`).join('')}</ul>`;
+        }
+
+        // Additional info
+        if (results.additional_info) {
+            html += `<h4>ℹ️ Additional Reconnaissance Info</h4>
+                     <p><strong>IP Address:</strong> ${results.additional_info.ip_address}<br>
+                     <strong>Domain:</strong> ${results.additional_info.domain}<br>
+                     <strong>Base URL:</strong> <a href="${results.additional_info.url_base}" target="_blank">${results.additional_info.url_base}</a><br>
+                     <strong>Total Endpoints Discovered:</strong> ${results.additional_info.total_endpoints}<br>
+                     <strong>Methodology:</strong> ${results.additional_info.methodology}<br>
+                     <strong>Techniques:</strong> ${results.additional_info.techniques}</p>`;
+        }
+
+        div.innerHTML = html;
+    }
+
+    async function runSelectedAttacks() {
+        const target = document.getElementById('attackTarget').value.trim();
+        const checkboxes = document.querySelectorAll('#attackListContainer input:checked');
+        const attackIds = Array.from(checkboxes).map(cb => cb.value);
+        if (!target || attackIds.length === 0) { alert('Enter target and select at least one attack'); return; }
+        document.getElementById('attackProgress').style.display = 'block';
+        document.getElementById('attackResults').style.display = 'none';
+        addLog('attack', `Starting ${attackIds.length} attacks on ${target}`);
+        const resp = await fetch('/api/run_attacks', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target, attack_ids: attackIds}) });
+        const data = await resp.json();
+        if (data.attack_session_id) {
+            currentAttackSession = data.attack_session_id;
+            if (attackInterval) clearInterval(attackInterval);
+            attackInterval = setInterval(async () => {
+                const res = await fetch(`/api/attack_results/${currentAttackSession}`);
+                const results = await res.json();
+                if (results.summary) {
+                    clearInterval(attackInterval);
+                    displayAttackResults(results);
+                    addLog('attack', 'Attack sequence completed');
+                    document.getElementById('attackProgressFill').style.width = '100%';
+                } else if (results.status === 'running') {
+                    document.getElementById('attackProgressFill').style.width = '60%';
+                }
+            }, 3000);
+        }
+    }
+
+    function displayAttackResults(data) {
+        const div = document.getElementById('attackResults');
+        div.style.display = 'block';
+        const summary = data.summary;
+        const riskScore = summary.risk_score;
+        let riskClass = 'risk-safe';
+        if (riskScore >= 80) riskClass = 'risk-critical';
+        else if (riskScore >= 60) riskClass = 'risk-high';
+        else if (riskScore >= 40) riskClass = 'risk-medium';
+        else if (riskScore >= 20) riskClass = 'risk-low';
+        let html = `<div class="risk-score ${riskClass}">Risk Score: ${riskScore.toFixed(1)}/100 (${summary.risk_level})</div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value">${summary.total_attacks}</div>Total Tests</div>
+            <div class="stat-card"><div class="stat-value" style="color:#f66">${summary.vulnerabilities_found}</div>Vulnerabilities</div>
+            <div class="stat-card"><div class="stat-value">${summary.vulnerability_percentage.toFixed(1)}%</div>Vulnerability Rate</div>
+        </div>`;
+        const vulns = data.attacks.filter(a => a.status === 'Vulnerable');
+        if (vulns.length) {
+            html += `<h3>🔴 Vulnerabilities Found (${vulns.length})</h3>`;
+            for (const v of vulns) {
+                let severityColor = '';
+                if (v.severity === 'Critical') severityColor = 'color:#f00';
+                else if (v.severity === 'High') severityColor = 'color:#f66';
+                else if (v.severity === 'Medium') severityColor = 'color:#fa0';
+                else severityColor = 'color:#ff0';
+                html += `<details><summary><strong>${v.name}</strong> <span style="${severityColor}">${v.severity}</span> (CVSS: ${v.cvss_score}) - Probability: ${v.probability}%</summary>
+                <div class="steps">
+                    <b>📍 Location:</b> <span class="location">${v.location}</span><br>
+                    <b>🔧 Payload Used:</b> <span class="payload">${v.payload_used || 'None'}</span><br>
+                    <b>💥 Impact:</b> ${v.impact}<br>
+                    <b>📝 Details:</b> ${v.details}<br>
+                    <b>📌 Exploitation Steps Taken by Tool:</b><ul>${(v.steps || []).map(s => `<li>${s}</li>`).join('')}</ul>
+                    ${v.evidence ? `<b>🔍 Evidence:</b> <a href="${v.evidence}" target="_blank">${v.evidence}</a><br>` : ''}
+                </div></details>`;
+            }
+        }
+        const secure = data.attacks.filter(a => a.status === 'Secure');
+        if (secure.length) {
+            html += `<h3>🟢 Secure (${secure.length})</h3><ul>${secure.map(s => `<li><strong>${s.name}</strong> – ${s.details}</li>`).join('')}</ul>`;
+        }
+        div.innerHTML = html;
+    }
+
+    async function upgradeTool() {
+        if (confirm("Upgrade tool to latest version? The application will restart.")) {
+            const response = await fetch('/api/upgrade', { method: 'POST' });
+            const data = await response.json();
+            alert(data.message);
+        }
+    }
+
+    loadAttackList();
+</script>
+</body>
+</html>

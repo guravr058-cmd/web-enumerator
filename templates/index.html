@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kali Web Enumerator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            color: #00ff00;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header {
+            text-align: center;
+            padding: 30px;
+            background: rgba(0,255,0,0.1);
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border: 1px solid #00ff00;
+        }
+        .header h1 { color: #00ff00; font-size: 2rem; }
+        .warning {
+            background: rgba(255,0,0,0.2);
+            border-left: 4px solid #ff0000;
+            padding: 15px;
+            margin: 20px 0;
+            color: #ff6666;
+        }
+        .scan-box {
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #00ff00;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            background: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 1rem;
+        }
+        button {
+            padding: 12px 30px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        button:hover { background: #00cc00; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .log {
+            background: #000;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            margin: 20px 0;
+            display: none;
+        }
+        .log-entry { margin: 5px 0; color: #00ff00; }
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        .result-card {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .result-card h3 {
+            color: #00ff00;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        th { color: #00ff00; }
+        a { color: #00ff00; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+        }
+        .badge-open { background: #00ff00; color: #000; }
+        .badge-high { background: #ff0000; color: #fff; }
+        .badge-medium { background: #ff8800; color: #000; }
+        .badge-low { background: #ffff00; color: #000; }
+        @media (max-width: 768px) {
+            .input-group { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Kali Web Enumerator</h1>
+            <p>Professional Web Security Scanner</p>
+        </div>
+        
+        <div class="warning">
+            ⚠️ WARNING: Only scan systems you own or have permission to test!
+        </div>
+        
+        <div class="scan-box">
+            <h2>🎯 Target</h2>
+            <div class="input-group">
+                <input type="text" id="target" placeholder="example.com or 192.168.1.1">
+                <button id="scanBtn" onclick="startScan()">Start Scan</button>
+            </div>
+        </div>
+        
+        <div id="log" class="log"></div>
+        
+        <div id="results" class="results"></div>
+    </div>
+    
+    <script>
+        let currentScanId = null;
+        let pollInterval = null;
+        
+        function addLog(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        async function startScan() {
+            const target = document.getElementById('target').value.trim();
+            if (!target) {
+                alert('Please enter a target');
+                return;
+            }
+            
+            const scanBtn = document.getElementById('scanBtn');
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Scanning...';
+            
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('results').style.display = 'none';
+            addLog(`Starting scan on ${target}...`);
+            
+            try {
+                const response = await fetch('/api/start_scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target })
+                });
+                const data = await response.json();
+                
+                if (data.scan_id) {
+                    currentScanId = data.scan_id;
+                    addLog(`Scan ID: ${currentScanId}`);
+                    
+                    // Poll for results
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = setInterval(checkResults, 3000);
+                } else {
+                    throw new Error(data.error || 'Failed to start scan');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`);
+                scanBtn.disabled = false;
+                scanBtn.textContent = 'Start Scan';
+            }
+        }
+        
+        async function checkResults() {
+            if (!currentScanId) return;
+            
+            try {
+                const response = await fetch(`/api/results/${currentScanId}`);
+                const results = await response.json();
+                
+                if (results.status === 'completed') {
+                    clearInterval(pollInterval);
+                    displayResults(results);
+                    document.getElementById('scanBtn').disabled = false;
+                    document.getElementById('scanBtn').textContent = 'Start Scan';
+                    addLog('✅ Scan completed!');
+                } else if (results.status === 'error') {
+                    clearInterval(pollInterval);
+                    addLog(`❌ Scan failed: ${results.error}`);
+                    document.getElementById('scanBtn').disabled = false;
+                    document.getElementById('scanBtn').textContent = 'Start Scan';
+                }
+            } catch (error) {
+                console.error('Error checking results:', error);
+            }
+        }
+        
+        function displayResults(results) {
+            document.getElementById('results').style.display = 'block';
+            let html = '';
+            
+            // Summary
+            html += `<div class="result-card">
+                <h3>📊 Scan Summary for ${results.target}</h3>
+                <table>
+                    <tr><th>Category</th><th>Count</th></tr>
+                    <tr><td>Subdomains Found</td><td>${results.subdomains?.length || 0}</td></tr>
+                    <tr><td>Open Ports</td><td>${results.open_ports?.length || 0}</td></tr>
+                    <tr><td>Web Endpoints</td><td>${results.endpoints?.length || 0}</td></tr>
+                    <tr><td>Technologies</td><td>${results.technologies?.length || 0}</td></tr>
+                    <tr><td>Vulnerabilities</td><td style="color:#ff6666">${results.vulnerabilities?.length || 0}</td></tr>
+                </table>
+            </div>`;
+            
+            // Subdomains
+            if (results.subdomains && results.subdomains.length > 0) {
+                html += `<div class="result-card">
+                    <h3>🌐 Subdomains (${results.subdomains.length})</h3>
+                    <table><thead><tr><th>Subdomain</th><th>IP</th></tr></thead><tbody>`;
+                results.subdomains.forEach(s => {
+                    html += `<tr><td>${s.subdomain}</td><td>${s.ip}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            // Endpoints
+            if (results.endpoints && results.endpoints.length > 0) {
+                html += `<div class="result-card">
+                    <h3>🔗 Web Endpoints (${results.endpoints.length})</h3>
+                    <table><thead><tr><th>URL</th><th>Status</th><th>Type</th></tr></thead><tbody>`;
+                results.endpoints.forEach(e => {
+                    const typeColor = e.type === 'dynamic' ? '#ff8800' : '#00ff00';
+                    html += `<tr>
+                        <td><a href="${e.url}" target="_blank">${e.url}</a></td>
+                        <td>${e.status}</td>
+                        <td style="color:${typeColor}">${e.type}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            // Ports
+            if (results.open_ports && results.open_ports.length > 0) {
+                html += `<div class="result-card">
+                    <h3>🔌 Open Ports</h3>
+                    <table><thead><tr><th>Port</th><th>Service</th></tr></thead><tbody>`;
+                results.open_ports.forEach(p => {
+                    html += `<tr><td>${p.port}</td><td>${p.service}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            // Technologies
+            if (results.technologies && results.technologies.length > 0) {
+                html += `<div class="result-card">
+                    <h3>💻 Technologies Detected</h3>
+                    <table><thead><tr><th>Technology</th><th>Category</th></tr></thead><tbody>`;
+                results.technologies.forEach(t => {
+                    html += `<tr><td>${t.name}</td><td>${t.category}</td></tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            // Vulnerabilities
+            if (results.vulnerabilities && results.vulnerabilities.length > 0) {
+                html += `<div class="result-card">
+                    <h3>⚠️ Security Findings</h3>
+                    <table><thead><tr><th>Severity</th><th>Issue</th><th>Endpoint</th></tr></thead><tbody>`;
+                results.vulnerabilities.forEach(v => {
+                    const severityClass = v.severity.toLowerCase();
+                    html += `<tr>
+                        <td><span class="badge badge-${severityClass}">${v.severity}</span></td>
+                        <td>${v.name}</td>
+                        <td><small>${v.endpoint}</small></td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+            
+            document.getElementById('results').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
